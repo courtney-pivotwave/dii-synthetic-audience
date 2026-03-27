@@ -224,6 +224,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 export default function Home() {
   const [sourceType, setSourceType] = useState<SourceType>('text');
   const [campaignName, setCampaignName] = useState('');
+  const [campaignContext, setCampaignContext] = useState('');
   const [message, setMessage] = useState('');
   const [urlInput, setUrlInput] = useState('');
   const [extractedFrom, setExtractedFrom] = useState<string | null>(null);
@@ -312,7 +313,11 @@ export default function Home() {
       const res = await fetch('/api/test-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message.trim(), campaignName: campaignName.trim() || null }),
+        body: JSON.stringify({
+          message: message.trim(),
+          campaignName: campaignName.trim() || null,
+          campaignContext: campaignContext.trim(),
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -362,6 +367,7 @@ export default function Home() {
     setSynthesisError(null);
     setMessage('');
     setCampaignName('');
+    setCampaignContext('');
     setExtractedFrom(null);
     setUrlInput('');
     setExtractError(null);
@@ -413,6 +419,20 @@ export default function Home() {
                 onChange={(e) => setCampaignName(e.target.value)}
                 placeholder="e.g. Storage Cost Accountability — Q3 FY26"
                 className="w-full px-4 py-2.5 bg-gray-950 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="campaign-context" className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Campaign Context <span className="text-gray-600 normal-case font-normal">(optional)</span>
+              </label>
+              <textarea
+                id="campaign-context"
+                value={campaignContext}
+                onChange={(e) => setCampaignContext(e.target.value)}
+                placeholder="e.g. Instaclustr is launching a new managed Kafka service at Community over Code, targeting enterprise teams already running self-managed Kafka who are evaluating a move to managed."
+                rows={3}
+                className="w-full px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 resize-none transition-colors"
               />
             </div>
 

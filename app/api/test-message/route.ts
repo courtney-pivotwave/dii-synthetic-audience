@@ -119,11 +119,19 @@ export interface PersonaResult {
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, campaignName } = await request.json();
+    const { message, campaignName, campaignContext } = await request.json();
 
     if (!message || message.trim().length === 0) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
+
+    const contextTrimmed =
+      typeof campaignContext === 'string' && campaignContext.trim().length > 0
+        ? campaignContext.trim()
+        : '';
+    const messageBody = contextTrimmed
+      ? `Campaign context: ${contextTrimmed}\n\nMessage to evaluate:\n${message.trim()}`
+      : `Message to evaluate:\n${message.trim()}`;
 
     const results: PersonaResult[] = await Promise.all(
       personas.map(async (persona): Promise<PersonaResult> => {
@@ -135,7 +143,7 @@ export async function POST(request: NextRequest) {
             messages: [
               {
                 role: 'user',
-                content: `Please evaluate this vendor message and respond with the JSON scoring format:\n\n"${message.trim()}"`,
+                content: `Please evaluate this vendor message and respond with the JSON scoring format:\n\n"${messageBody}"`,
               },
             ],
           });
