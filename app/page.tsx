@@ -795,7 +795,7 @@ export default function Home() {
               </label>
 
               <div className="flex flex-col gap-2">
-                <div className="flex gap-1.5 p-1 bg-gray-950 rounded-lg border border-gray-800 w-fit">
+                <div className="flex gap-1.5 p-1 bg-gray-950 rounded-lg border border-gray-800 w-fit max-w-full flex-wrap">
                   <button
                     type="button"
                     onClick={() => {
@@ -826,6 +826,11 @@ export default function Home() {
                     Upload Doc
                   </button>
                 </div>
+                <p className="text-xs text-gray-500 leading-relaxed max-w-2xl">
+                  <span className="font-medium text-gray-400">Upload Doc</span> shows a PDF or Word (.docx) picker — extract fills the brief below.
+                  <span className="text-gray-600"> · </span>
+                  <span className="font-medium text-gray-400">Type Brief</span> is for writing or pasting directly.
+                </p>
               </div>
 
               {briefInputMode === 'upload' && (
@@ -854,27 +859,25 @@ export default function Home() {
                 </div>
               )}
 
-              {briefInputMode === 'type' && (
-                <div className="flex flex-col gap-1.5">
-                  {briefExtractedFrom && (
-                    <div className="flex justify-end">
-                      <span className="text-xs text-teal-500 bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded-full">
-                        From: {briefExtractedFrom.length > 40 ? '...' + briefExtractedFrom.slice(-40) : briefExtractedFrom}
-                      </span>
-                    </div>
-                  )}
-                  <textarea
-                    id="campaign-brief"
-                    value={brief}
-                    onChange={(e) => setBrief(e.target.value)}
-                    placeholder="Describe the situation — what are you trying to accomplish, who is the competitor or context, and what makes this moment urgent for your buyer?"
-                    rows={5}
-                    className="w-full px-4 py-3 bg-gray-950 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 resize-none transition-colors"
-                    required
-                  />
-                  <p className="text-xs text-gray-600">{brief.length} characters</p>
-                </div>
-              )}
+              <div className="flex flex-col gap-1.5">
+                {briefExtractedFrom && briefInputMode === 'type' && (
+                  <div className="flex justify-end">
+                    <span className="text-xs text-teal-500 bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded-full">
+                      From: {briefExtractedFrom.length > 40 ? '...' + briefExtractedFrom.slice(-40) : briefExtractedFrom}
+                    </span>
+                  </div>
+                )}
+                <textarea
+                  id="campaign-brief"
+                  value={brief}
+                  onChange={(e) => setBrief(e.target.value)}
+                  placeholder="Describe the situation — what are you trying to accomplish, who is the competitor or context, and what makes this moment urgent for your buyer?"
+                  rows={5}
+                  className="w-full px-4 py-3 bg-gray-950 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 resize-none transition-colors"
+                  required
+                />
+                <p className="text-xs text-gray-600">{brief.length} characters</p>
+              </div>
             </div>
             )}
 
