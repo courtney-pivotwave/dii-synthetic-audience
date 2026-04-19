@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 
 type SourceType = 'text' | 'url' | 'pdf' | 'image';
 type AppMode = 'score' | 'direction';
+type BriefInputMode = 'type' | 'upload';
 
 interface PersonaDirectionResult {
   id: string;
@@ -325,6 +326,12 @@ export default function Home() {
   const [campaignContext, setCampaignContext] = useState('');
   const [message, setMessage] = useState('');
   const [brief, setBrief] = useState('');
+  const [briefInputMode, setBriefInputMode] = useState<BriefInputMode>('type');
+  const [briefExtracting, setBriefExtracting] = useState(false);
+  const [briefExtractError, setBriefExtractError] = useState<string | null>(null);
+  const [briefExtractedFrom, setBriefExtractedFrom] = useState<string | null>(null);
+  const [briefDocHasFile, setBriefDocHasFile] = useState(false);
+  const briefDocInputRef = useRef<HTMLInputElement>(null);
   const [urlInput, setUrlInput] = useState('');
   const [extractedFrom, setExtractedFrom] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
@@ -380,6 +387,30 @@ export default function Home() {
       setImagePreview(null);
     } finally {
       setExtracting(false);
+    }
+  };
+
+  const handleExtractBrief = async () => {
+    const file = briefDocInputRef.current?.files?.[0];
+    if (!file) return;
+    setBriefExtracting(true);
+    setBriefExtractError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/extract-brief', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Extraction failed');
+      if (typeof data.text !== 'string') throw new Error('Invalid response from server');
+      setBrief(data.text);
+      setBriefExtractedFrom(file.name);
+      setBriefInputMode('type');
+      if (briefDocInputRef.current) briefDocInputRef.current.value = '';
+      setBriefDocHasFile(false);
+    } catch (err) {
+      setBriefExtractError(err instanceof Error ? err.message : 'Could not extract from document');
+    } finally {
+      setBriefExtracting(false);
     }
   };
 
@@ -500,6 +531,11 @@ export default function Home() {
     setSynthesisError(null);
     setMessage('');
     setBrief('');
+    setBriefInputMode('type');
+    setBriefExtractError(null);
+    setBriefExtractedFrom(null);
+    if (briefDocInputRef.current) briefDocInputRef.current.value = '';
+    setBriefDocHasFile(false);
     setCampaignName('');
     setCampaignContext('');
     setExtractedFrom(null);
@@ -753,20 +789,92 @@ export default function Home() {
               <p className="text-xs text-gray-600">{message.length} characters</p>
             </div>
             ) : (
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-3">
               <label htmlFor="campaign-brief" className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 Campaign Brief <span className="text-red-500">*</span>
               </label>
-              <textarea
-                id="campaign-brief"
-                value={brief}
-                onChange={(e) => setBrief(e.target.value)}
-                placeholder="Describe the situation — what are you trying to accomplish, who is the competitor or context, and what makes this moment urgent for your buyer?"
-                rows={5}
-                className="w-full px-4 py-3 bg-gray-950 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 resize-none transition-colors"
-                required
-              />
-              <p className="text-xs text-gray-600">{brief.length} characters</p>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-1.5 p-1 bg-gray-950 rounded-lg border border-gray-800 w-fit">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBriefInputMode('type');
+                      setBriefExtractError(null);
+                    }}
+                    className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      briefInputMode === 'type'
+                        ? 'bg-teal-500 text-gray-950 shadow-sm'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                    }`}
+                  >
+                    Type Brief
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBriefInputMode('upload');
+                      setBriefExtractError(null);
+                      setBriefDocHasFile(!!briefDocInputRef.current?.files?.[0]);
+                    }}
+                    className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      briefInputMode === 'upload'
+                        ? 'bg-teal-500 text-gray-950 shadow-sm'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                    }`}
+                  >
+                    Upload Doc
+                  </button>
+                </div>
+              </div>
+
+              {briefInputMode === 'upload' && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Document</label>
+                  <div className="flex gap-2 flex-wrap items-stretch">
+                    <input
+                      ref={briefDocInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+                      onChange={(e) => setBriefDocHasFile(!!e.target.files?.[0])}
+                      className="flex-1 min-w-[200px] text-sm text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-800 file:text-teal-400 hover:file:bg-gray-700 cursor-pointer bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleExtractBrief}
+                      disabled={briefExtracting || !briefDocHasFile}
+                      className="px-4 py-2.5 bg-teal-500 hover:bg-teal-400 disabled:bg-gray-800 disabled:text-gray-600 text-gray-950 text-sm font-semibold rounded-lg transition-colors whitespace-nowrap self-center"
+                    >
+                      {briefExtracting ? 'Extracting...' : 'Extract →'}
+                    </button>
+                  </div>
+                  {briefExtractError && (
+                    <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{briefExtractError}</p>
+                  )}
+                </div>
+              )}
+
+              {briefInputMode === 'type' && (
+                <div className="flex flex-col gap-1.5">
+                  {briefExtractedFrom && (
+                    <div className="flex justify-end">
+                      <span className="text-xs text-teal-500 bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded-full">
+                        From: {briefExtractedFrom.length > 40 ? '...' + briefExtractedFrom.slice(-40) : briefExtractedFrom}
+                      </span>
+                    </div>
+                  )}
+                  <textarea
+                    id="campaign-brief"
+                    value={brief}
+                    onChange={(e) => setBrief(e.target.value)}
+                    placeholder="Describe the situation — what are you trying to accomplish, who is the competitor or context, and what makes this moment urgent for your buyer?"
+                    rows={5}
+                    className="w-full px-4 py-3 bg-gray-950 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 resize-none transition-colors"
+                    required
+                  />
+                  <p className="text-xs text-gray-600">{brief.length} characters</p>
+                </div>
+              )}
             </div>
             )}
 
