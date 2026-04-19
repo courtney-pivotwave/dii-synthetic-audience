@@ -22,7 +22,15 @@ After reading the vendor message, respond with ONLY a valid JSON object — no m
 Scoring guide: 1-2 = misses the mark, 3 = generic/neutral, 4 = resonates clearly, 5 = feels written for me specifically.
 `;
 
-const personas = [
+const DIRECTION_JSON_INSTRUCTIONS = `
+Respond with ONLY a valid JSON object — no markdown, no explanation, just the JSON:
+
+{
+  "direction": "<your complete advisory response: address all five numbered points clearly. Use plain text; you may use \\n for line breaks inside the string.>"
+}
+`;
+
+const personaBases = [
   {
     id: 'storage-admin',
     name: 'Jordan',
@@ -30,7 +38,7 @@ const personas = [
     company: 'Large Enterprise (Financial Services)',
     avatar: 'SA',
     color: 'blue',
-    systemPrompt: `You are Jordan Chen, a Senior Storage Administrator at a large financial services firm. Nine years managing heterogeneous storage: on-premises arrays, SAN/block storage, VMware workloads, and a growing multi-cloud footprint. Your team is 2 people managing storage for 3,000+ employees.
+    basePrompt: `You are Jordan Chen, a Senior Storage Administrator at a large financial services firm. Nine years managing heterogeneous storage: on-premises arrays, SAN/block storage, VMware workloads, and a growing multi-cloud footprint. Your team is 2 people managing storage for 3,000+ employees.
 
 Daily reality: you juggle multiple monitoring tools that do not talk to each other. You spend hours manually correlating metrics when something breaks. You have been burned by finger-pointing incidents where storage gets blamed for application or network issues.
 
@@ -43,9 +51,7 @@ What you care about most:
 
 Current pain: evaluating whether to consolidate monitoring tools. Looked at Grafana and CMDB integrations but they require too much manual maintenance. Need to do more with less.
 
-You are technically sharp, skeptical of vendor claims, and respond only to specific proof points and concrete time savings. Executive strategy talk bounces off you. You care whether this makes your day measurably easier.
-
-${SCORING_INSTRUCTIONS}`,
+You are technically sharp, skeptical of vendor claims, and respond only to specific proof points and concrete time savings. Executive strategy talk bounces off you. You care whether this makes your day measurably easier.`,
   },
   {
     id: 'infra-manager',
@@ -54,7 +60,7 @@ ${SCORING_INSTRUCTIONS}`,
     company: 'Mid-Market Technology Company',
     avatar: 'IM',
     color: 'purple',
-    systemPrompt: `You are Sarah Okonkwo, an Infrastructure and Storage Operations Manager at a mid-market technology company with 500 employees. You oversee 4 engineers managing on-premises storage, VMware, Kubernetes clusters, and hybrid cloud. You report to the VP of IT.
+    basePrompt: `You are Sarah Okonkwo, an Infrastructure and Storage Operations Manager at a mid-market technology company with 500 employees. You oversee 4 engineers managing on-premises storage, VMware, Kubernetes clusters, and hybrid cloud. You report to the VP of IT.
 
 Your world: accountable for SLOs, cost control, and enabling modernization without new risks. Finance wants you to justify every infrastructure dollar. You inherited a fragmented toolset and must consolidate it.
 
@@ -67,9 +73,7 @@ What you care about most:
 
 Current pain: spent $2.3M on storage last year and cannot explain what drove that spend to the CFO. Three overlapping monitoring tools. Team wastes 4-6 hours weekly on manual reports. Actively comparing vendor options.
 
-You evaluate messaging by asking: does this address my real operational and financial challenges or is it vendor positioning? You respond well to cost reduction proof points and team productivity outcomes. Skeptical of feature lists without business impact.
-
-${SCORING_INSTRUCTIONS}`,
+You evaluate messaging by asking: does this address my real operational and financial challenges or is it vendor positioning? You respond well to cost reduction proof points and team productivity outcomes. Skeptical of feature lists without business impact.`,
   },
   {
     id: 'vp-it',
@@ -78,7 +82,7 @@ ${SCORING_INSTRUCTIONS}`,
     company: 'Large Enterprise (Healthcare)',
     avatar: 'VP',
     color: 'slate',
-    systemPrompt: `You are Michael Torres, VP of IT and Head of Infrastructure at a large healthcare organization with 8,000 employees across 12 sites. You own the technology strategy for all infrastructure, report to the CIO, and manage a $15M annual IT operations budget. Your environment spans on-premises storage, VMware, Kubernetes, multi-cloud (AWS and Azure), and legacy systems running mission-critical clinical applications.
+    basePrompt: `You are Michael Torres, VP of IT and Head of Infrastructure at a large healthcare organization with 8,000 employees across 12 sites. You own the technology strategy for all infrastructure, report to the CIO, and manage a $15M annual IT operations budget. Your environment spans on-premises storage, VMware, Kubernetes, multi-cloud (AWS and Azure), and legacy systems running mission-critical clinical applications.
 
 Priorities: align IT with business strategy, demonstrate ROI, reduce operational risk, drive modernization without disrupting patient care. HIPAA compliance adds complexity to every decision.
 
@@ -91,13 +95,46 @@ What you care about most:
 
 Current pain: no unified view of infrastructure health and utilization. Two costly outages in 18 months eroded executive confidence. Team spends too much time on reactive firefighting instead of strategic work.
 
-You evaluate messaging at the strategic level — not hands-on troubleshooting. You need to know if this gives your team the capabilities they need AND gives you board-level visibility for confident decisions. You are turned off by tactical feature lists with no business translation. You respond to ROI proof points and outcomes that position IT as a strategic driver.
+You evaluate messaging at the strategic level — not hands-on troubleshooting. You need to know if this gives your team the capabilities they need AND gives you board-level visibility for confident decisions. You are turned off by tactical feature lists with no business translation. You respond to ROI proof points and outcomes that position IT as a strategic driver.`,
+  },
+] as const;
+
+const personas = personaBases.map((p) => ({
+  ...p,
+  systemPrompt: `${p.basePrompt}
 
 ${SCORING_INSTRUCTIONS}`,
-  },
-];
+}));
 
-export interface PersonaResult {
+const directionPersonas = personaBases.map((p) => ({
+  ...p,
+  systemPrompt: `${p.basePrompt}
+
+${DIRECTION_JSON_INSTRUCTIONS}`,
+}));
+
+function buildDirectionUserMessage(
+  brief: string,
+  campaignContext: string,
+  personaName: string,
+  personaRole: string
+): string {
+  const contextBlock =
+    campaignContext.trim().length > 0 ? `\n\n${campaignContext.trim()}` : '';
+
+  return `I am developing messaging for the following situation: ${brief.trim()}.${contextBlock}
+
+Respond as ${personaName}, ${personaRole}. Tell me:
+1. What is top of mind for you right now given this situation?
+2. What messaging angle would resonate most with you and why?
+3. What would you need to see or hear to take action?
+4. What approach would turn you off or feel like the wrong message?
+5. What is your single most important question before moving forward?
+
+Be specific to your role and situation. Do not score anything — just advise.`;
+}
+
+interface PersonaScoreResult {
   id: string;
   name: string;
   role: string;
@@ -117,24 +154,114 @@ export interface PersonaResult {
   error?: string;
 }
 
+interface PersonaDirectionResult {
+  id: string;
+  name: string;
+  role: string;
+  company: string;
+  avatar: string;
+  color: string;
+  direction: string;
+  error?: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { message, campaignName, campaignContext } = await request.json();
+    const body = await request.json();
+    const {
+      message,
+      campaignName,
+      campaignContext,
+      mode: rawMode,
+      brief,
+    } = body as {
+      message?: string;
+      campaignName?: string | null;
+      campaignContext?: string;
+      mode?: string;
+      brief?: string;
+    };
 
-    if (!message || message.trim().length === 0) {
-      return NextResponse.json({ error: 'Message is required' }, { status: 400 });
-    }
-
+    const mode = rawMode === 'direction' ? 'direction' : 'score';
     const contextTrimmed =
       typeof campaignContext === 'string' && campaignContext.trim().length > 0
         ? campaignContext.trim()
         : '';
+
+    if (mode === 'direction') {
+      const briefTrimmed = typeof brief === 'string' ? brief.trim() : '';
+      if (!briefTrimmed) {
+        return NextResponse.json({ error: 'Brief is required for direction mode' }, { status: 400 });
+      }
+
+      const results: PersonaDirectionResult[] = await Promise.all(
+        directionPersonas.map(async (persona): Promise<PersonaDirectionResult> => {
+          try {
+            const userContent = buildDirectionUserMessage(
+              briefTrimmed,
+              contextTrimmed,
+              persona.name,
+              persona.role
+            );
+
+            const response = await client.messages.create({
+              model: 'claude-sonnet-4-6',
+              max_tokens: 2048,
+              system: persona.systemPrompt,
+              messages: [{ role: 'user', content: userContent }],
+            });
+
+            const content = response.content[0];
+            if (content.type !== 'text') throw new Error('Unexpected response type');
+
+            const cleaned = content.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const parsed = JSON.parse(cleaned) as { direction?: string };
+
+            return {
+              id: persona.id,
+              name: persona.name,
+              role: persona.role,
+              company: persona.company,
+              avatar: persona.avatar,
+              color: persona.color,
+              direction: typeof parsed.direction === 'string' ? parsed.direction : '',
+            };
+          } catch (err) {
+            return {
+              id: persona.id,
+              name: persona.name,
+              role: persona.role,
+              company: persona.company,
+              avatar: persona.avatar,
+              color: persona.color,
+              direction: '',
+              error: err instanceof Error ? err.message : 'Failed to get response',
+            };
+          }
+        })
+      );
+
+      return NextResponse.json({
+        results,
+        campaignName: campaignName || null,
+        message: briefTrimmed,
+        mode: 'direction' as const,
+        rationalizationSignal: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // --- score mode (default) ---
+    if (!message || message.trim().length === 0) {
+      return NextResponse.json({ error: 'Message is required' }, { status: 400 });
+    }
+
     const messageBody = contextTrimmed
       ? `Campaign context: ${contextTrimmed}\n\nMessage to evaluate:\n${message.trim()}`
       : `Message to evaluate:\n${message.trim()}`;
 
-    const results: PersonaResult[] = await Promise.all(
-      personas.map(async (persona): Promise<PersonaResult> => {
+    const results: PersonaScoreResult[] = await Promise.all(
+      personas.map(async (persona): Promise<PersonaScoreResult> => {
         try {
           const response = await client.messages.create({
             model: 'claude-sonnet-4-6',
@@ -178,7 +305,7 @@ export async function POST(request: NextRequest) {
             differentiation_score: 0,
             differentiation_note: '',
             primary_objection: '',
-            meeting_threshold: 'No',
+            meeting_threshold: 'No' as const,
             meeting_reason: '',
             improvement: '',
             error: err instanceof Error ? err.message : 'Failed to get response',
@@ -195,6 +322,7 @@ export async function POST(request: NextRequest) {
       results,
       campaignName: campaignName || null,
       message: message.trim(),
+      mode: 'score' as const,
       rationalizationSignal,
       timestamp: new Date().toISOString(),
     });

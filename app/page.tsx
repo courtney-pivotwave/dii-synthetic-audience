@@ -3,8 +3,19 @@
 import { useState, useRef } from 'react';
 
 type SourceType = 'text' | 'url' | 'pdf' | 'image';
+type AppMode = 'score' | 'direction';
 
-interface PersonaResult {
+interface PersonaDirectionResult {
+  id: string;
+  name: string;
+  role: string;
+  company: string;
+  avatar: string;
+  direction?: string;
+  error?: string;
+}
+
+interface PersonaScoreResult {
   id: string;
   name: string;
   role: string;
@@ -23,7 +34,10 @@ interface PersonaResult {
   error?: string;
 }
 
+type PersonaResult = PersonaScoreResult | PersonaDirectionResult;
+
 interface TestResult {
+  mode?: AppMode;
   results: PersonaResult[];
   campaignName: string | null;
   message: string;
@@ -37,11 +51,21 @@ interface RewriteItem {
   example?: string;
 }
 
-interface SynthesisResult {
+interface SynthesisScoreResult {
+  mode: 'score';
   whats_landing: string[];
   whats_falling_flat: string[];
   rewrite_brief: RewriteItem[];
 }
+
+interface SynthesisDirectionResult {
+  mode: 'direction';
+  dominant_messaging_angle: string;
+  key_proof_point: string;
+  thing_to_avoid: string;
+}
+
+type SynthesisResult = SynthesisScoreResult | SynthesisDirectionResult;
 
 function ScoreBadge({ score, label }: { score: number; label: string }) {
   const color =
@@ -76,7 +100,52 @@ function MeetingBadge({ threshold }: { threshold: 'Yes' | 'Maybe' | 'No' }) {
   );
 }
 
-function PersonaCard({ result }: { result: PersonaResult }) {
+function PersonaDirectionCard({ result }: { result: PersonaDirectionResult }) {
+  const avatarColors: Record<string, string> = {
+    SA: 'bg-blue-500',
+    IM: 'bg-violet-500',
+    VP: 'bg-slate-500',
+  };
+  const avatarColor = avatarColors[result.avatar] || 'bg-gray-600';
+
+  if (result.error) {
+    return (
+      <div className="bg-gray-900 rounded-xl border border-red-500/30 p-5 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-full ${avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+            {result.avatar}
+          </div>
+          <div>
+            <div className="font-semibold text-white text-sm">{result.name}</div>
+            <div className="text-xs text-gray-400">{result.role}</div>
+          </div>
+        </div>
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3">Error: {result.error}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 flex flex-col gap-4 hover:border-gray-700 transition-colors">
+      <div className="flex items-start gap-3">
+        <div className={`w-9 h-9 rounded-full ${avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+          {result.avatar}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold text-white text-sm">{result.name}</div>
+          <div className="text-xs text-gray-400">{result.role}</div>
+        </div>
+      </div>
+      {result.direction && (
+        <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap border-t border-gray-800 pt-4">
+          {result.direction}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PersonaCard({ result }: { result: PersonaScoreResult }) {
   const avatarColors: Record<string, string> = {
     SA: 'bg-blue-500',
     IM: 'bg-violet-500',
@@ -197,6 +266,34 @@ function LoadingCard({ name, role, avatar }: { name: string; role: string; avata
   );
 }
 
+function DirectionLoadingCard({ name, role, avatar }: { name: string; role: string; avatar: string }) {
+  const avatarColors: Record<string, string> = {
+    SA: 'bg-blue-500',
+    IM: 'bg-violet-500',
+    VP: 'bg-slate-500',
+  };
+  return (
+    <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 flex flex-col gap-4 animate-pulse">
+      <div className="flex items-center gap-3">
+        <div className={`w-9 h-9 rounded-full ${avatarColors[avatar] || 'bg-gray-600'} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+          {avatar}
+        </div>
+        <div>
+          <div className="font-semibold text-white text-sm">{name}</div>
+          <div className="text-xs text-gray-400">{role}</div>
+        </div>
+      </div>
+      <div className="space-y-2 pt-2 border-t border-gray-800">
+        <div className="h-2.5 bg-gray-800 rounded w-full" />
+        <div className="h-2.5 bg-gray-800 rounded w-5/6" />
+        <div className="h-2.5 bg-gray-800 rounded w-4/5" />
+        <div className="h-2.5 bg-gray-800 rounded w-full" />
+        <div className="h-2.5 bg-gray-800 rounded w-3/4" />
+      </div>
+    </div>
+  );
+}
+
 const PLACEHOLDER_PERSONAS = [
   { name: 'Jordan', role: 'Senior Storage Administrator', avatar: 'SA' },
   { name: 'Sarah', role: 'Infrastructure & Storage Operations Manager', avatar: 'IM' },
@@ -222,15 +319,18 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 export default function Home() {
+  const [appMode, setAppMode] = useState<AppMode>('score');
   const [sourceType, setSourceType] = useState<SourceType>('text');
   const [campaignName, setCampaignName] = useState('');
   const [campaignContext, setCampaignContext] = useState('');
   const [message, setMessage] = useState('');
+  const [brief, setBrief] = useState('');
   const [urlInput, setUrlInput] = useState('');
   const [extractedFrom, setExtractedFrom] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMode, setLoadingMode] = useState<AppMode>('score');
   const [result, setResult] = useState<TestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [synthesis, setSynthesis] = useState<SynthesisResult | null>(null);
@@ -304,20 +404,33 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (appMode === 'score' && !message.trim()) return;
+    if (appMode === 'direction' && !brief.trim()) return;
+    setLoadingMode(appMode);
     setLoading(true);
     setResult(null);
     setError(null);
     setSynthesis(null);
     try {
+      const body =
+        appMode === 'direction'
+          ? {
+              mode: 'direction' as const,
+              brief: brief.trim(),
+              campaignName: campaignName.trim() || null,
+              campaignContext: campaignContext.trim(),
+            }
+          : {
+              mode: 'score' as const,
+              message: message.trim(),
+              campaignName: campaignName.trim() || null,
+              campaignContext: campaignContext.trim(),
+            };
+
       const res = await fetch('/api/test-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: message.trim(),
-          campaignName: campaignName.trim() || null,
-          campaignContext: campaignContext.trim(),
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -331,9 +444,14 @@ export default function Home() {
     }
   };
 
-  const avgScore = (key: keyof PersonaResult) => {
-    if (!result) return '—';
-    const scores = result.results.map((r) => r[key] as number).filter((s) => s > 0);
+  const resultMode: AppMode = result?.mode ?? 'score';
+
+  const avgScore = (key: keyof PersonaScoreResult) => {
+    if (!result || resultMode === 'direction') return '—';
+    const scores = result.results
+      .filter((r): r is PersonaScoreResult => 'comprehension_score' in r)
+      .map((r) => r[key] as number)
+      .filter((s) => s > 0);
     return scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '—';
   };
 
@@ -349,11 +467,26 @@ export default function Home() {
           results: result.results,
           message: result.message,
           campaignName: result.campaignName,
+          mode: resultMode,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Synthesis failed');
-      setSynthesis(data);
+      if (data.mode === 'direction') {
+        setSynthesis({
+          mode: 'direction',
+          dominant_messaging_angle: data.dominant_messaging_angle ?? '',
+          key_proof_point: data.key_proof_point ?? '',
+          thing_to_avoid: data.thing_to_avoid ?? '',
+        });
+      } else {
+        setSynthesis({
+          mode: 'score',
+          whats_landing: data.whats_landing ?? [],
+          whats_falling_flat: data.whats_falling_flat ?? [],
+          rewrite_brief: data.rewrite_brief ?? [],
+        });
+      }
     } catch (err) {
       setSynthesisError(err instanceof Error ? err.message : 'Synthesis failed');
     } finally {
@@ -366,6 +499,7 @@ export default function Home() {
     setSynthesis(null);
     setSynthesisError(null);
     setMessage('');
+    setBrief('');
     setCampaignName('');
     setCampaignContext('');
     setExtractedFrom(null);
@@ -408,6 +542,34 @@ export default function Home() {
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
 
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Mode</label>
+              <div className="flex gap-1.5 p-1 bg-gray-950 rounded-lg border border-gray-800 w-fit">
+                <button
+                  type="button"
+                  onClick={() => { setAppMode('score'); setError(null); }}
+                  className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    appMode === 'score'
+                      ? 'bg-teal-500 text-gray-950 shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                  }`}
+                >
+                  Test a Message
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAppMode('direction'); setError(null); }}
+                  className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    appMode === 'direction'
+                      ? 'bg-teal-500 text-gray-950 shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                  }`}
+                >
+                  Get Direction
+                </button>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-1.5">
               <label htmlFor="campaign" className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 Campaign Name <span className="text-gray-600 normal-case font-normal">(optional)</span>
@@ -436,6 +598,8 @@ export default function Home() {
               />
             </div>
 
+            {appMode === 'score' && (
+            <>
             <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Message Source</label>
               <div className="flex gap-1.5 p-1 bg-gray-950 rounded-lg border border-gray-800 w-fit">
@@ -557,7 +721,10 @@ export default function Home() {
                 {extractError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{extractError}</p>}
               </div>
             )}
+            </>
+            )}
 
+            {appMode === 'score' ? (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <label htmlFor="message" className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -585,11 +752,28 @@ export default function Home() {
               />
               <p className="text-xs text-gray-600">{message.length} characters</p>
             </div>
+            ) : (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="campaign-brief" className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Campaign Brief <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="campaign-brief"
+                value={brief}
+                onChange={(e) => setBrief(e.target.value)}
+                placeholder="Describe the situation — what are you trying to accomplish, who is the competitor or context, and what makes this moment urgent for your buyer?"
+                rows={5}
+                className="w-full px-4 py-3 bg-gray-950 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 resize-none transition-colors"
+                required
+              />
+              <p className="text-xs text-gray-600">{brief.length} characters</p>
+            </div>
+            )}
 
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={loading || !message.trim()}
+                disabled={loading || (appMode === 'score' ? !message.trim() : !brief.trim())}
                 className="flex items-center gap-2 bg-teal-500 hover:bg-teal-400 disabled:bg-gray-800 disabled:text-gray-600 disabled:cursor-not-allowed text-gray-950 font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors"
               >
                 {loading ? (
@@ -600,6 +784,8 @@ export default function Home() {
                     </svg>
                     Running 3 personas in parallel...
                   </>
+                ) : appMode === 'direction' ? (
+                  'Get Direction →'
                 ) : (
                   'Run Message Test →'
                 )}
@@ -629,7 +815,13 @@ export default function Home() {
               Consulting three buyer personas simultaneously...
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {PLACEHOLDER_PERSONAS.map((p) => <LoadingCard key={p.name} {...p} />)}
+              {PLACEHOLDER_PERSONAS.map((p) =>
+                loadingMode === 'direction' ? (
+                  <DirectionLoadingCard key={p.name} {...p} />
+                ) : (
+                  <LoadingCard key={p.name} {...p} />
+                )
+              )}
             </div>
           </div>
         )}
@@ -639,20 +831,22 @@ export default function Home() {
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
                 <h2 className="text-base font-semibold text-white">
-                  {result.campaignName ? result.campaignName : 'Test Results'}
+                  {result.campaignName ? result.campaignName : resultMode === 'direction' ? 'Direction' : 'Test Results'}
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   "{result.message.length > 100 ? result.message.slice(0, 100) + '...' : result.message}"
                 </p>
               </div>
+              {resultMode === 'score' && (
               <div className="flex gap-3">
                 <StatCard label="Comprehension" value={avgScore('comprehension_score')} />
                 <StatCard label="Resonance" value={avgScore('resonance_score')} />
                 <StatCard label="Differentiation" value={avgScore('differentiation_score')} />
               </div>
+              )}
             </div>
 
-            {result.rationalizationSignal && (
+            {resultMode === 'score' && result.rationalizationSignal && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex gap-3">
                 <span className="text-amber-400 text-lg shrink-0">⚠</span>
                 <div>
@@ -665,9 +859,12 @@ export default function Home() {
               </div>
             )}
 
+            {resultMode === 'score' && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-6 flex-wrap">
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Would take a meeting?</div>
-              {result.results.map((r) => (
+              {result.results
+                .filter((r): r is PersonaScoreResult => 'meeting_threshold' in r)
+                .map((r) => (
                 <div key={r.id} className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5">
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${
@@ -679,9 +876,16 @@ export default function Home() {
                 </div>
               ))}
             </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {result.results.map((r) => <PersonaCard key={r.id} result={r} />)}
+              {resultMode === 'direction'
+                ? result.results.map((r) => (
+                    <PersonaDirectionCard key={r.id} result={r as PersonaDirectionResult} />
+                  ))
+                : result.results.map((r) => (
+                    <PersonaCard key={r.id} result={r as PersonaScoreResult} />
+                  ))}
             </div>
 
             {!synthesis && !synthesizing && (
@@ -693,9 +897,13 @@ export default function Home() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Generate Copy Brief
+                  {resultMode === 'direction' ? 'Generate Strategic Brief' : 'Generate Copy Brief'}
                 </button>
-                <p className="text-xs text-gray-600">What's landing, what's not, and exactly what to rewrite</p>
+                <p className="text-xs text-gray-600">
+                  {resultMode === 'direction'
+                    ? 'Dominant angle, shared proof point, and what to avoid — synthesized across all three personas'
+                    : "What's landing, what's not, and exactly what to rewrite"}
+                </p>
               </div>
             )}
 
@@ -705,7 +913,9 @@ export default function Home() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span className="text-sm text-teal-400">Generating copy brief...</span>
+                <span className="text-sm text-teal-400">
+                  {resultMode === 'direction' ? 'Generating strategic brief...' : 'Generating copy brief...'}
+                </span>
               </div>
             )}
 
@@ -715,7 +925,41 @@ export default function Home() {
               </div>
             )}
 
-            {synthesis && (
+            {synthesis && synthesis.mode === 'direction' && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-gray-800" />
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">Strategic Brief</h3>
+                  <div className="h-px flex-1 bg-gray-800" />
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+                    <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-800 bg-teal-500/5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                      <div className="text-xs font-bold text-teal-400 uppercase tracking-wider">Dominant messaging angle</div>
+                    </div>
+                    <p className="text-sm text-gray-300 leading-relaxed px-5 py-4">{synthesis.dominant_messaging_angle}</p>
+                  </div>
+                  <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+                    <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-800 bg-emerald-500/5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Key proof point (all three)</div>
+                    </div>
+                    <p className="text-sm text-gray-300 leading-relaxed px-5 py-4">{synthesis.key_proof_point}</p>
+                  </div>
+                  <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+                    <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-800 bg-red-500/5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                      <div className="text-xs font-bold text-red-400 uppercase tracking-wider">Thing to avoid</div>
+                    </div>
+                    <p className="text-sm text-gray-300 leading-relaxed px-5 py-4">{synthesis.thing_to_avoid}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {synthesis && synthesis.mode === 'score' && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-3">
                   <div className="h-px flex-1 bg-gray-800" />
