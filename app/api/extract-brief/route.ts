@@ -2,17 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-const MAX_CHARS = 4000;
-const TRUNC_NOTE = '(Brief truncated to 4,000 characters for processing)';
-
-function finalizeExtractedText(raw: string): string {
-  const trimmed = raw.replace(/\u0000/g, '').trim();
-  if (trimmed.length <= MAX_CHARS) {
-    return trimmed;
-  }
-  return `${trimmed.slice(0, MAX_CHARS)}\n\n${TRUNC_NOTE}`;
-}
-
 function extensionOf(name: string): string {
   const i = name.lastIndexOf('.');
   return i >= 0 ? name.slice(i).toLowerCase() : '';
@@ -71,7 +60,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const text = finalizeExtractedText(normalized);
+    const text = normalized.replace(/\u0000/g, '').trim();
 
     return NextResponse.json({ text });
   } catch (err) {
